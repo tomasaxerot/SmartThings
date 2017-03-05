@@ -1,7 +1,7 @@
 /**
  *  Tyco Door/Window Sensor
  *
- *  Copyright 2015 SmartThings
+ *  Copyright 2017 Tomas Axerot
  *
  *  Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  *  in compliance with the License. You may obtain a copy of the License at:
@@ -16,7 +16,7 @@
 import physicalgraph.zigbee.clusters.iaszone.ZoneStatus
 
 metadata {
-	definition (name: "Tyco Door/Window Sensor", namespace: "smartthings", author: "SmartThings") {
+	definition (name: "Tyco Door/Window Sensor", namespace: "tomasaxerot", author: "SmartThings") {
 		capability "Battery"
 		capability "Configuration"
 		capability "Contact Sensor"
