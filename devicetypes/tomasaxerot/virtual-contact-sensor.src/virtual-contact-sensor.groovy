@@ -12,7 +12,6 @@
  *
  */
 metadata {
-	// Automatically generated. Make future change here.
 	definition (name: "Virtual Contact Sensor", namespace: "tomasaxerot", author: "Tomas Axerot") {
 		capability "Contact Sensor"		
 
@@ -25,8 +24,8 @@ metadata {
 		status "closed": "contact:closed"
 	}
 
-	tiles {
-		standardTile("contact", "device.contact", width: 2, height: 2) {			
+	tiles(scale: 2) {
+		standardTile("contact", "device.contact", width: 6, height: 4) {			
             state("open", label:'${name}', icon:"st.contact.contact.open", backgroundColor:"#ffa81e")
 			state("closed", label:'${name}', icon:"st.contact.contact.closed", backgroundColor:"#79b821")            
 		}
@@ -42,11 +41,11 @@ def parse(String description) {
 }
 
 def open() {
-	log.trace "open()"
+	log.trace "open"
 	sendEvent(name: "contact", value: "open")
 }
 
 def close() {
-	log.trace "close()"
+	log.trace "close"
     sendEvent(name: "contact", value: "closed")
 }

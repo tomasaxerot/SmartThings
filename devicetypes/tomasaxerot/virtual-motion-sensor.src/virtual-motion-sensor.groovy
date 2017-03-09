@@ -12,7 +12,6 @@
  *
  */
 metadata {
-	// Automatically generated. Make future change here.
 	definition (name: "Virtual Motion Sensor", namespace: "tomasaxerot", author: "Tomas Axerot") {
 		capability "Motion Sensor"
 
@@ -25,10 +24,10 @@ metadata {
 		status "inactive": "motion:inactive"
 	}
 
-	tiles {
-		standardTile("motion", "device.motion", width: 2, height: 2) {
-			state("inactive", label:'no motion', icon:"st.motion.motion.inactive", backgroundColor:"#cccccc")
-			state("active", label:'motion', icon:"st.motion.motion.active", backgroundColor:"#00A0DC")
+	tiles(scale: 2) {
+		standardTile("motion", "device.motion", width: 6, height: 4) {
+			state("active", label:'motion', icon:"st.motion.motion.active", backgroundColor:"#53a7c0")
+            state("inactive", label:'no motion', icon:"st.motion.motion.inactive", backgroundColor:"#ffffff")
 		}
         
 		main "motion"		
@@ -42,11 +41,11 @@ def parse(String description) {
 }
 
 def active() {
-	log.trace "active()"
+	log.trace "active"
 	sendEvent(name: "motion", value: "active")
 }
 
 def inactive() {
-	log.trace "inactive()"
+	log.trace "inactive"
     sendEvent(name: "motion", value: "inactive")
 }
