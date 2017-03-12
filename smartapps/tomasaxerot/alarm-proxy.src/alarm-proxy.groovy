@@ -35,7 +35,8 @@ preferences {
     }
     section("Entry Delay Configuration") {
     	input "entryDelay", "number", required: true, title: "Seconds", description: "Delay alarm entry by this many seconds", range: "0..120"        	
-        input "sendPush", "bool", required: false, title: "Send Push Notification when entry delay starts?"
+        input "entrySendPush", "bool", required: false, title: "Send Push Notification when entry delay starts?"
+        input "entrySirens", "capability.alarm", required: false, title: "Beep with siren when entry delay starts?", multiple: true
     }   
 }
 
@@ -210,6 +211,11 @@ def closeVirtualSensor() {
 def alarmSystemStatusHandler(evt) {
 	log.trace "alarmSystemStatusHandler: ${evt.value}"   
     atomicState.alarmSystemStatus = evt.value
+    
+    //TODO
+    //if(state is off)
+    	//cancel any runIns
+        //syncStates
 }
 
 def isAway() {
@@ -260,11 +266,10 @@ def entry() {
         atomicState.isEntryDelayStarted = true
         atomicState.entryDelayStarted = now()
         
+        beepEntrySiren()
         sendEntryNotification()
         
         runIn(entryDelay, "resetEntry")       
-        
-        //Todo, bleep with siren, chime
     }
 }
 
@@ -273,8 +278,16 @@ def resetEntry() {
     atomicState.isEntryDelayStarted = false
 }
 
+def beepEntrySiren() {
+	if(entrySirens) {
+    	log.debug "beepEntrySiren"
+    	entrySirens.siren()  	    	
+        entrySirens.off()       
+    }    
+}
+
 def sendEntryNotification() {	
-	if (sendPush) {
+	if (entrySendPush) {
     	log.debug "sendEntryNotification"
     	def message = "Entry delay started, disarm within $entryDelay seconds"
         sendPush(message)
