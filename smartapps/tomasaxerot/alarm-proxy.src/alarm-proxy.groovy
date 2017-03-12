@@ -135,7 +135,7 @@ def motionActiveHandler(evt) {
     
     if(trigger(evt.device)){
     	entry()
-    	runIn(entryDelay, "activateVirtualSensor")
+    	runIn(entryDelay, activateVirtualSensor)
     }    
 }
 
@@ -150,7 +150,7 @@ def contactOpenHandler(evt) {
     
     if(trigger(evt.device)) {
     	entry()
-        runIn(entryDelay, "openVirtualSensor")
+        runIn(entryDelay, openVirtualSensor)
     }    
 }
 
@@ -210,12 +210,16 @@ def closeVirtualSensor() {
 
 def alarmSystemStatusHandler(evt) {
 	log.trace "alarmSystemStatusHandler: ${evt.value}"   
-    atomicState.alarmSystemStatus = evt.value
+    atomicState.alarmSystemStatus = evt.value    
     
-    //TODO
-    //if(state is off)
-    	//cancel any runIns
-        //syncStates
+    if(isOff()) {
+    	unschedule(activateVirtualSensor)
+        unschedule(openVirtualSensor)
+    }    	
+}
+
+def isOff() {
+	return atomicState.alarmSystemStatus == "off"
 }
 
 def isAway() {
