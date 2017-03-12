@@ -51,7 +51,7 @@ def updated() {
 }
 
 def initialize() {
-	log.debug "initialize"
+	log.trace "initialize"
 	atomicState.isEntryDelayStarted = false    
     atomicState.alarmSystemStatus = location.currentState("alarmSystemStatus")?.value
     subscribe(location, "alarmSystemStatus" , alarmSystemStatusHandler)
@@ -105,7 +105,7 @@ def anyMotionActive() {
         return true
     }
         
-    if(stayMotionIn && isStay && stayMotionIn.any {it.currentMotion == "active" }) {
+    if(stayMotionIn && isStay() && stayMotionIn.any {it.currentMotion == "active" }) {
     	log.debug "anyMotionActive: stayMotionIn is active"
         return true
     }
