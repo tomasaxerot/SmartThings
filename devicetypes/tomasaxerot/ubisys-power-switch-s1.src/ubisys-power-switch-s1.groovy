@@ -17,7 +17,9 @@
   * I would consider this DTH in alpha state atm
   * 
   * Version:
+  * 0.2 (2017-03-19): Removed power divisor, added configuration tile
   * 0.1 (2017-03-15): Initial version of DTH for Ubisys Power switch S1 (Rev. 3), Application: 1.09, Stack: 1.88
+  * 
   */
 
 metadata {
@@ -75,9 +77,13 @@ metadata {
 		standardTile("refresh", "device.power", inactiveLabel: false, decoration: "flat", width: 2, height: 2) {
 			state "default", label: '', action: "refresh.refresh", icon: "st.secondary.refresh"
 		}
+        
+        standardTile("configure", "device.configure", inactiveLabel: false, decoration: "flat", width: 2, height: 2) {
+			state "configure", label:'', action:"configuration.configure", icon:"st.secondary.configure"
+		}
 
 		main "switch"
-		details(["switch", "refresh"])
+		details(["switch", "refresh", "configure"])
 	}    
 }
 
@@ -88,10 +94,9 @@ def parse(String description) {
 	def event = zigbee.getEvent(description)
 	if (event) {
     	log.trace "parse: event is $event.name"
-		if (event.name == "power") {
-			def value = (event.value as Integer) / 10
+		if (event.name == "power") {			
             def descriptionText = '{{ device.displayName }} power is {{ value }} Watts'
-			event = createEvent(name: event.name, value: value, descriptionText: descriptionText, translatable: true)
+			event = createEvent(name: event.name, value: event.value, descriptionText: descriptionText, translatable: true)
 		} else if (event.name == "switch") {
 			def descriptionText = event.value == "on" ? '{{ device.displayName }} is On' : '{{ device.displayName }} is Off'
 			event = createEvent(name: event.name, value: event.value, descriptionText: descriptionText, translatable: true)
@@ -145,7 +150,7 @@ def ping() {
 
 def refresh() {
 	log.trace "refresh"	
-    zigbee.onOffRefresh() + zigbee.readAttribute(0x0702, 0x0400, [destEndpoint: 0x03]) /* + zigbee.readAttribute(0x0B04, 0x050B, [destEndpoint: 0x03])*/
+    zigbee.onOffRefresh() + zigbee.readAttribute(0x0702, 0x0400, [destEndpoint: 0x03]) /*+ zigbee.readAttribute(0x0B04, 0x050B, [destEndpoint: 0x03])*/
 }
 
 def configure() {
@@ -156,8 +161,4 @@ def configure() {
     
     // OnOff minReportTime 0 seconds, maxReportTime 5 min. Reporting interval if no activity
     refresh() + zigbee.onOffConfig(0, 300) + zigbee.configureReporting(0x0702, 0x0400, 0x2A, 1, 600, 0x05, [destEndpoint: 0x03]) /*+ zigbee.configureReporting(0x0B04, 0x050B, 0x29, 1, 600, 0x05, [destEndpoint: 0x03])*/
-    
-    //TODO: Check measurements when connected to 230V
-    //23:05:07: warn Received invalid data for type. AttrId: 0x050B, Type: 29, Value: 8000
-	//23:05:07: debug description is read attr - raw: F926030B040C0B0500290080, dni: F926, endpoint: 03, cluster: 0B04, size: 0C, attrId: 050b, result: success, encoding: 29, value: 8000
 }
