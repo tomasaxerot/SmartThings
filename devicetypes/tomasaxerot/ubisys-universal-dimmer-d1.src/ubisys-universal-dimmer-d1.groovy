@@ -17,6 +17,7 @@
   * I would consider this DTH in alpha state atm
   * 
   * Version: 
+  * 0.3 (2017-03-26): Added possibility to set device mode: Push/Bi-Stable
   * 0.2 (2017-03-25): Added configuration and possibility to set phase control, also logging Dimmer setup(capabilities, status and mode) on refresh
   * 0.1 (2017-03-24): Initial version of DTH for Ubisys Universal Dimmer D1 (Rev. 1), Application: 1.12, Stack: 1.88, Version: 0x010C0158
   * 
@@ -68,10 +69,14 @@ metadata {
             tileAttribute ("device.level", key: "SLIDER_CONTROL") {
                 attributeState "level", action:"switch level.setLevel"
             }
-            tileAttribute ("power", key: "SECONDARY_CONTROL") {
-                attributeState "power", label:'${currentValue} W'
-            }
-        }
+            //tileAttribute ("power", key: "SECONDARY_CONTROL") {
+            //    attributeState "power", label:'${currentValue} W'
+            //}
+        }        
+        
+        valueTile("power", "Power", decoration: "flat", width: 2, height: 2) {
+			state "default", label:'${currentValue} W'
+		}
         
         standardTile("refresh", "device.refresh", inactiveLabel: false, decoration: "flat", width: 2, height: 2) {
             state "default", label:"", action:"refresh.refresh", icon:"st.secondary.refresh"
@@ -82,19 +87,13 @@ metadata {
 		}
         
         main "switch"
-        details(["switch", "refresh", "configure"])
+        details(["switch", "power", "refresh", "configure"])
     }
     
-    preferences {
-        //input name: "email", type: "email", title: "Email", description: "Enter Email Address", required: true, displayDuringSetup: true
-        //input name: "text", type: "text", title: "Text", description: "Enter Text", required: true
-        //input name: "number", type: "number", title: "Number", description: "Enter number", required: true
-        //input name: "bool", type: "bool", title: "Bool", description: "Enter boolean", required: true
-        //input name: "password", type: "password", title: "password", description: "Enter password", required: true
-        //input name: "phone", type: "phone", title: "phone", description: "Enter phone", required: true
-        //input name: "decimal", type: "decimal", title: "decimal", description: "Enter decimal", required: true
-        //input name: "time", type: "time", title: "time", description: "Enter time", required: true
+    preferences {        
+        input name: "deviceSetup", type: "enum", title: "Device Setup", options: ["Push", "Bi-Stable"], description: "Enter Device Setup, Push button is default", required: false
         input name: "phaseControl", type: "enum", title: "Phase Control", options: ["Auto", "Leading", "Trailing"], description: "Enter Phase Control, Auto is recommended", required: false
+        input name: "readConfiguration", type: "bool", title: "Read Advanced Configuration", description: "Enter Read Advanced Configuration", required: false
     }
 }
 
@@ -140,54 +139,43 @@ def parse(String description) {
     	log.trace "parse: map is $map"
         
     	if (map.clusterInt == 0xFC01 && map.attrInt == 0x0000 && map.value) {        	
-            def capabilitiesInt = Integer.parseInt(map.value, 16)
-            /* 8-bit bitmap	BITMAP8	0x18
-            Forward Phase Control #0 (0x01) When this bit is set, the dimmer supports AC forward phase control.
-			Reverse Phase Control #1 (0x02) When this bit is set, the dimmer supports AC reverse phase control.
-			RFU #2…#4 (0x1C) These bits are reserved for future use and must be written as 0 and ignored when read.
-			Reactance Discriminator #5 (0x20) When this bit is set, the dimmer is capable of measuring the reactance of 
-            	the attached ballast good enough to distinguish inductive and capacitive loads and select the appropriate dimming technique accordingly.
-			Configurable Curve #6 (0x40) When this bit is set, the dimmer is capable of replacing the built-in, default
-            	dimming curve, with a curve that better suits the attached ballast
-			Overload detection #7 (0x80) When this bit is set, the dimmer is capable of detecting an output overload
-            	and shutting the output off to prevent damage to the dimmer.
-            */            
-            if(capabilitiesInt & 0x01)
-            	log.trace "parse: Forward Phase Control supported"                
-            if(capabilitiesInt & 0x02)
-            	log.trace "parse: Reverse Phase Control supported"
+            def capabilitiesInt = Integer.parseInt(map.value, 16)            
+                       
+            log.debug "parse: AC Forward Phase Control ${capabilitiesInt & 0x01 ? "supported" : "not supported"}"            
+            log.debug "parse: AC Reverse Phase Control ${capabilitiesInt & 0x02 ? "supported" : "not supported"}"
+            log.debug "parse: Reactance Discriminator/Auto mode ${capabilitiesInt & 0x20 ? "supported" : "not supported"}"            
+            log.debug "parse: Configurable Curve ${capabilitiesInt & 0x40 ? "supported" : "not supported"}"            
+            log.debug "parse: Overload Detection ${capabilitiesInt & 0x80 ? "supported" : "not supported"}"                
+            
+            return null
         }
         else if (map.clusterInt == 0xFC01 && map.attrInt == 0x0001 && map.value) {        	
             def statusInt = Integer.parseInt(map.value, 16)
-            /* 8-bit bitmap	BITMAP8	0x18
-            Forward Phase Control #0 (0x01) When this bit is set, the dimmer is currently operating in AC forward phase control mode.
-            Reverse Phase Control #1 (0x02) When this bit is set, the dimmer is currently operating in AC reverse phase control.
-            Operational #2 (0x04) These bits are reserved for future use and must be written as 0 and ignored when read.
-            Overload #3 (0x08) The output is currently turned off, because the dimmer has detected an overload.
-            RFU #4…#5 (0x30) Reserved for future use. Set to 0 when writing, ignore when reading.
-            Capacitive Load #6 (0x40) When this bit is set, the dimmer’s reactance discriminator has detected a capacitive load.
-            Inductive Load #7 (0x80) When this bit is set, the dimmer’s reactance discriminator has detected an inductive load.
-            */            
+                 
             if(statusInt & 0x01)
-            	log.trace "parse: operating in forward phase (Leading) control mode"                
+            	log.debug "parse: operating in forward phase (Leading) control mode"                
             if(statusInt & 0x02)
-            	log.trace "parse: operating in reverse phase (Trailing) control mode"                
+            	log.debug "parse: operating in reverse phase (Trailing) control mode"                
             if(statusInt & 0x08)
-            	log.trace "parse: overload"
+            	log.debug "parse: overload"
             if(statusInt & 0x40)
-            	log.trace "parse: capacitive load detected"
+            	log.debug "parse: capacitive load detected"
             if(statusInt & 0x80)
-            	log.trace "parse: inductive load detected"            
+            	log.debug "parse: inductive load detected"                 
+            
+            return null
         }
         else if (map.clusterInt == 0xFC01 && map.attrInt == 0x0002 && map.value) {
-        	/*
-            Phase Control #0…#1 (0x02) Specifies the mode of operation:
-			00b: Automatically select the appropriate dimming technique
-			01b: Always use forward phase control (leading edge, L)
-			02b: Always use reverse phase control (trailing edge, C/R)
-			11b: Reserved. Do not use.
-            */
-            log.trace "parse: mode is: $map.value"
+        	def modeInt = Integer.parseInt(map.value, 16)        	
+            
+            if((modeInt & 0x03) == 0)
+            	log.debug "parse: Phase control is Auto"                
+            if((modeInt & 0x03) == 1)
+            	log.debug "parse: Phase control is force forward phase control (leading edge, L)"                
+            if((modeInt & 0x03) == 2)
+            	log.debug "parse: Phase control is force reverse phase control (trailing edge, C/R)"            
+            
+            return null
         }    
     }
     
@@ -230,33 +218,47 @@ def ping() {
 
 def refresh() {
 	log.trace "refresh"
-    //zigbee.onOffRefresh() + zigbee.levelRefresh() + zigbee.simpleMeteringPowerRefresh() + zigbee.electricMeasurementPowerRefresh() + zigbee.onOffConfig(0, 300) + zigbee.levelConfig() + zigbee.simpleMeteringPowerConfig() + zigbee.electricMeasurementPowerConfig()
-    //Removed: zigbee.electricMeasurementPowerRefresh(), zigbee.electricMeasurementPowerConfig()
-    //zigbee.readAttribute(0x0702, 0x0400, [destEndpoint: 0x04]) /*+ zigbee.readAttribute(0x0B04, 0x050B, [destEndpoint: 0x04])*/
+    
+    //zigbee.readAttribute(0x0B04, 0x050B, [destEndpoint: 0x04])
+    //zigbee.readAttribute(0xFC00, 0x0001, [destEndpoint: 0xE8])
     
     def refreshCmds = []
     refreshCmds += zigbee.onOffRefresh() +
     			   zigbee.levelRefresh() +
-                   zigbee.readAttribute(0x0702, 0x0400, [destEndpoint: 0x04]) +
-                   zigbee.readAttribute(0xFC01, 0x0000) + 
-                   zigbee.readAttribute(0xFC01, 0x0001) +
-                   zigbee.readAttribute(0xFC01, 0x0002)
+                   zigbee.readAttribute(0x0702, 0x0400, [destEndpoint: 0x04])
+                   
+    if(readConfiguration) {
+    	refreshCmds += zigbee.readAttribute(0xFC01, 0x0000) + 
+                   	   zigbee.readAttribute(0xFC01, 0x0001) +
+                       zigbee.readAttribute(0xFC01, 0x0002)
+    }
+                   
                 
     return refreshCmds
 }
 
 def configure() {
-    //log.debug "Configuring Reporting and Bindings."
     log.trace "configure"
 
     // Device-Watch allows 2 check-in misses from device + ping (plus 1 min lag time)
     // enrolls with default periodic reporting until newer 5 min interval is confirmed
     sendEvent(name: "checkInterval", value: 2 * 60 * 60 + 1 * 60, displayed: false, data: [protocol: "zigbee", hubHardwareId: device.hub.hardwareID])
     
-    //zigbee.configureReporting(0x0702, 0x0400, 0x2A, 1, 600, 0x05, [destEndpoint: 0x04]) /*+ zigbee.configureReporting(0x0B04, 0x050B, 0x29, 1, 600, 0x05, [destEndpoint: 0x04])*/
-    
-    
     def configCmds = []
+    
+    if(deviceSetup) {
+    	log.debug "configure: set device setup to $deviceSetup"
+    	        
+        //Push(Default)	: 070008030b0106320105000803c6010832000500080386010802000603070106070008020b0006320105000802c6000832000500080286000802000602070006000841
+        //Bi-Stable		: 02000602030006020006020D0006000241
+        
+        if(deviceSetup == "Push") {                
+        	configCmds += "st wattr 0x${device.deviceNetworkId} 0xE8 0xFC00 0x0001 0x48 {070008030b0106320105000803c6010832000500080386010802000603070106070008020b0006320105000802c6000832000500080286000802000602070006000841}"            
+        }
+        else if(deviceSetup == "Bi-Stable") {                
+        	configCmds += "st wattr 0x${device.deviceNetworkId} 0xE8 0xFC00 0x0001 0x48 {02000602030006020006020D0006000241}"            
+        }    
+    }
     
     //Configure phase control
     if(phaseControl) {
@@ -271,6 +273,7 @@ def configure() {
     }
     
     //Reporting
+    //TODO: zigbee.configureReporting(0x0B04, 0x050B, 0x29, 1, 600, 0x05, [destEndpoint: 0x04])
     configCmds += zigbee.onOffConfig(0, 300) + 
     			  zigbee.levelConfig() + 
                   zigbee.configureReporting(0x0702, 0x0400, 0x2A, 1, 600, 0x05, [destEndpoint: 0x04]) 
