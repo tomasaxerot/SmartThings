@@ -35,20 +35,10 @@ metadata {
         capability "Health Check"
         capability "Light"
 
-		//0000 = Basic
-        //0003 = Identify
-        //0004 = Groups
-        //0005 = Scenes
-        //0006 = On/off        
-        //0008 = Level control
-        //0301 = ballast
-        //0702 = Metering
-		//0B04 = Electrical Measurement
-        //FC01 = Dimmer Setup, Manufacturer configuration
+		//0000 = Basic, 0003 = Identify, 0004 = Groups, 0005 = Scenes, 0006 = On/off, 0008 = Level control, 0301 = ballast, 0702 = Metering, 0B04 = Electrical Measurement, FC01 = Dimmer Setup
 
 		//Raw
-		//01 0104 0101 00 08 0000 0003 0004 0005 0006 0008 0301 FC01 00
-        //model: D1 (5503), manufacturer: ubisys
+		//01 0104 0101 00 08 0000 0003 0004 0005 0006 0008 0301 FC01 00        
         //Dimmable Light (0x0101)
         //Endpoint 1: in: 0000, 0003, 0004, 0005, 0006, 0008, 0301 FC01        
         //Endpoint 2: in: 0000, 0003, out: 0005, 0006, 0008 (input 1)
@@ -66,16 +56,22 @@ metadata {
                 attributeState "turningOn", label:'${name}', action:"switch.off", icon:"st.switches.switch.on", backgroundColor:"#00A0DC", nextState:"turningOff"
                 attributeState "turningOff", label:'${name}', action:"switch.on", icon:"st.switches.switch.off", backgroundColor:"#ffffff", nextState:"turningOn"
             }
-            tileAttribute ("device.level", key: "SLIDER_CONTROL") {
-                attributeState "level", action:"switch level.setLevel"
-            }
-            //tileAttribute ("power", key: "SECONDARY_CONTROL") {
-            //    attributeState "power", label:'${currentValue} W'
+            //Looks a bit weird on android, stacked with slider
+            //tileAttribute ("device.power", key:"SECONDARY_CONTROL") {
+            //    attributeState "power", icon:"st.switches.switch.on", label:'${currentValue} W', defaultState: true
             //}
-        }        
+            tileAttribute ("device.level", key: "SLIDER_CONTROL") {
+                attributeState "level", action:"switch level.setLevel", defaultState: true
+            }            
+        } 
         
-        valueTile("power", "Power", decoration: "flat", width: 2, height: 2) {
-			state "default", label:'${currentValue} W'
+        valueTile("power", "device.power", width: 2, height: 2) {
+			state("default", label:'${currentValue} W',
+				backgroundColors:[
+					[value: 0, color: "#ffffff"],
+					[value: 1, color: "#00A0DC"]					
+				]
+			)
 		}
         
         standardTile("refresh", "device.refresh", inactiveLabel: false, decoration: "flat", width: 2, height: 2) {
@@ -84,7 +80,7 @@ metadata {
         
         standardTile("configure", "device.configure", inactiveLabel: false, decoration: "flat", width: 2, height: 2) {
 			state "configure", label:'', action:"configuration.configure", icon:"st.secondary.configure"
-		}
+		}        
         
         main "switch"
         details(["switch", "power", "refresh", "configure"])
@@ -219,8 +215,8 @@ def ping() {
 def refresh() {
 	log.trace "refresh"
     
-    //zigbee.readAttribute(0x0B04, 0x050B, [destEndpoint: 0x04])
-    //zigbee.readAttribute(0xFC00, 0x0001, [destEndpoint: 0xE8])
+    //zigbee.readAttribute(0x0B04, 0x050B, [destEndpoint: 0x04]) //Electric measurement
+    //zigbee.readAttribute(0xFC00, 0x0001, [destEndpoint: 0xE8]) //Device setup
     
     def refreshCmds = []
     refreshCmds += zigbee.onOffRefresh() +
@@ -231,11 +227,14 @@ def refresh() {
     	refreshCmds += zigbee.readAttribute(0xFC01, 0x0000) + 
                    	   zigbee.readAttribute(0xFC01, 0x0001) +
                        zigbee.readAttribute(0xFC01, 0x0002)
-    }
-                   
+    }                   
                 
     return refreshCmds
 }
+
+//Device Setup. Push is default
+private getDEVICESETUP_BISTABLE() { "02000602030006020006020D0006000241" }
+private getDEVICESETUP_PUSH() { "070008030b0106320105000803c6010832000500080386010802000603070106070008020b0006320105000802c6000832000500080286000802000602070006000841" }
 
 def configure() {
     log.trace "configure"
@@ -247,16 +246,11 @@ def configure() {
     def configCmds = []
     
     if(deviceSetup) {
-    	log.debug "configure: set device setup to $deviceSetup"
-    	        
-        //Push(Default)	: 070008030b0106320105000803c6010832000500080386010802000603070106070008020b0006320105000802c6000832000500080286000802000602070006000841
-        //Bi-Stable		: 02000602030006020006020D0006000241
-        
-        if(deviceSetup == "Push") {                
-        	configCmds += "st wattr 0x${device.deviceNetworkId} 0xE8 0xFC00 0x0001 0x48 {070008030b0106320105000803c6010832000500080386010802000603070106070008020b0006320105000802c6000832000500080286000802000602070006000841}"            
-        }
-        else if(deviceSetup == "Bi-Stable") {                
-        	configCmds += "st wattr 0x${device.deviceNetworkId} 0xE8 0xFC00 0x0001 0x48 {02000602030006020006020D0006000241}"            
+    	log.debug "configure: set device setup to $deviceSetup"        
+        if(deviceSetup == "Push") {                        	
+            configCmds += "st wattr 0x${device.deviceNetworkId} 0xE8 0xFC00 0x0001 0x48 {${DEVICESETUP_BISTABLE}}"            
+        } else if(deviceSetup == "Bi-Stable") {                
+        	configCmds += "st wattr 0x${device.deviceNetworkId} 0xE8 0xFC00 0x0001 0x48 {${DEVICESETUP_PUSH}}"            
         }    
     }
     
