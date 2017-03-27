@@ -1,4 +1,4 @@
-# SmartThings Platform Reated GitHub Repo
+# SmartThings Platform Related GitHub Repo
 
 Device Type Handlers:
 * [Visonic MCT-340 E](https://github.com/tomasaxerot/SmartThings/blob/master/devicetypes/tomasaxerot/visonic-door-window-sensor.src/visonic-door-window-sensor.groovy)
