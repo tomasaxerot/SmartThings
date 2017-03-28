@@ -35,11 +35,10 @@ metadata {
         capability "Health Check"
         capability "Light"
 
-		//0000 = Basic, 0003 = Identify, 0004 = Groups, 0005 = Scenes, 0006 = On/off, 0008 = Level control, 0301 = ballast, 0702 = Metering, 0B04 = Electrical Measurement, FC01 = Dimmer Setup
+		//0000 = Basic, 0003 = Identify, 0004 = Groups, 0005 = Scenes, 0006 = On/off, 0008 = Level control, 
+        //0301 = ballast, 0702 = Metering, 0B04 = Electrical Measurement, FC00 = Device Setup, FC01 = Dimmer Setup
 
-		//Raw
-		//01 0104 0101 00 08 0000 0003 0004 0005 0006 0008 0301 FC01 00        
-        //Dimmable Light (0x0101)
+		//Raw: 01 0104 0101 00 08 0000 0003 0004 0005 0006 0008 0301 FC01 00
         //Endpoint 1: in: 0000, 0003, 0004, 0005, 0006, 0008, 0301 FC01        
         //Endpoint 2: in: 0000, 0003, out: 0005, 0006, 0008 (input 1)
         //Endpoint 3: in: 0000, 0003, out: 0005, 0006, 0008 (input 2)
@@ -55,11 +54,7 @@ metadata {
                 attributeState "off", label:'${name}', action:"switch.on", icon:"st.switches.switch.off", backgroundColor:"#ffffff", nextState:"turningOn"
                 attributeState "turningOn", label:'${name}', action:"switch.off", icon:"st.switches.switch.on", backgroundColor:"#00A0DC", nextState:"turningOff"
                 attributeState "turningOff", label:'${name}', action:"switch.on", icon:"st.switches.switch.off", backgroundColor:"#ffffff", nextState:"turningOn"
-            }
-            //Looks a bit weird on android, stacked with slider
-            //tileAttribute ("device.power", key:"SECONDARY_CONTROL") {
-            //    attributeState "power", icon:"st.switches.switch.on", label:'${currentValue} W', defaultState: true
-            //}
+            }            
             tileAttribute ("device.level", key: "SLIDER_CONTROL") {
                 attributeState "level", action:"switch level.setLevel", defaultState: true
             }            
@@ -99,35 +94,33 @@ def parse(String description) {
 
 	def event = zigbee.getEvent(description)
 	if (event) {
-    	log.trace "parse: event is $event.name"
-		if (event.name == "power") {			
-            def descriptionText = '{{ device.displayName }} power is {{ value }} Watts'
-			return createEvent(name: event.name, value: event.value, descriptionText: descriptionText, translatable: true)
-		} 
-        
+    	log.trace "parse: event is $event.name"        
         return createEvent(event)        
 	} 
     
     def cluster = zigbee.parse(description)
-    if(cluster) {
+	if(cluster) {
     	log.trace "parse: cluster is $cluster"
-
-		if (cluster && cluster.clusterId == 0x0006 && cluster.command == 0x07) {
+		
+		if (cluster.clusterId == 0x0006 && cluster.command == 0x07) {
 			if (cluster.data[0] == 0x00) {
-				log.debug "ON/OFF REPORTING CONFIG RESPONSE: " + cluster
+				log.debug "On/Off reporting successful"
 				return createEvent(name: "checkInterval", value: 60 * 12, displayed: false, data: [protocol: "zigbee", hubHardwareId: device.hub.hardwareID])
 			} else {
-				log.warn "ON/OFF REPORTING CONFIG FAILED- error code:${cluster.data[0]}"
-				return null
+				log.warn "On/Off reporting failed with code: ${cluster.data[0]}"				
 			}
-		} else if(cluster && !shouldProcessMessage(cluster)) {
-        	log.trace "parse: cluster message ignored"
-            return null        	
+		} else if (cluster.clusterId == 0xfc00 && cluster.command == 0x04) {
+			if (cluster.data[0] == 0x00) {
+				log.debug "Device Setup successful"				
+			} else {
+				log.warn "Device Setup failed with code: ${cluster.data[0]}"                				
+			}            
+		} else if(!shouldProcessMessage(cluster)) {
+        	log.trace "parse: cluster message ignored"            
         } else {
-			log.warn "parse: failed to process cluster message"
-			log.debug "${cluster}"
-            return null
+			log.warn "parse: failed to process cluster message"			            
 		}
+        return null
     }
     
     def map = zigbee.parseDescriptionAsMap(description)
@@ -142,8 +135,6 @@ def parse(String description) {
             log.debug "parse: Reactance Discriminator/Auto mode ${capabilitiesInt & 0x20 ? "supported" : "not supported"}"            
             log.debug "parse: Configurable Curve ${capabilitiesInt & 0x40 ? "supported" : "not supported"}"            
             log.debug "parse: Overload Detection ${capabilitiesInt & 0x80 ? "supported" : "not supported"}"                
-            
-            return null
         }
         else if (map.clusterInt == 0xFC01 && map.attrInt == 0x0001 && map.value) {        	
             def statusInt = Integer.parseInt(map.value, 16)
@@ -158,8 +149,6 @@ def parse(String description) {
             	log.debug "parse: capacitive load detected"
             if(statusInt & 0x80)
             	log.debug "parse: inductive load detected"                 
-            
-            return null
         }
         else if (map.clusterInt == 0xFC01 && map.attrInt == 0x0002 && map.value) {
         	def modeInt = Integer.parseInt(map.value, 16)        	
@@ -170,9 +159,11 @@ def parse(String description) {
             	log.debug "parse: Phase control is force forward phase control (leading edge, L)"                
             if((modeInt & 0x03) == 2)
             	log.debug "parse: Phase control is force reverse phase control (trailing edge, C/R)"            
-            
-            return null
         }    
+        else {
+        	log.warn "parse: failed to process map message"
+        }
+        return null
     }
     
     log.warn "parse: failed to process message"	
@@ -180,8 +171,8 @@ def parse(String description) {
 }
 
 private boolean shouldProcessMessage(cluster) {
-    // 0x0B is default response indicating message got through
-    // 0x07 is bind message
+    // 0x0B is default response
+    // 0x07 is configure reporting response
     boolean ignoredMessage = cluster.profileId != 0x0104 ||
         cluster.command == 0x0B ||
         cluster.command == 0x07 ||
@@ -204,9 +195,7 @@ def setLevel(value) {
     zigbee.setLevel(value) + (value?.toInteger() > 0 ? zigbee.on() : [])
 }
 
-/**
- * PING is used by Device-Watch in attempt to reach the Device
- * */
+//PING is used by Device-Watch in attempt to reach the Device 
 def ping() {
 	log.trace "ping"
     return zigbee.onOffRefresh()
@@ -248,9 +237,9 @@ def configure() {
     if(deviceSetup) {
     	log.debug "configure: set device setup to $deviceSetup"        
         if(deviceSetup == "Push") {                        	
-            configCmds += "st wattr 0x${device.deviceNetworkId} 0xE8 0xFC00 0x0001 0x48 {${DEVICESETUP_BISTABLE}}"            
+            configCmds += "st wattr 0x${device.deviceNetworkId} 0xE8 0xFC00 0x0001 0x48 {${DEVICESETUP_PUSH}}"            
         } else if(deviceSetup == "Bi-Stable") {                
-        	configCmds += "st wattr 0x${device.deviceNetworkId} 0xE8 0xFC00 0x0001 0x48 {${DEVICESETUP_PUSH}}"            
+        	configCmds += "st wattr 0x${device.deviceNetworkId} 0xE8 0xFC00 0x0001 0x48 {${DEVICESETUP_BISTABLE}}"            
         }    
     }
     
