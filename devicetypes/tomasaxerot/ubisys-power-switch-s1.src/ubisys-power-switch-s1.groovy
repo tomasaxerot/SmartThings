@@ -22,11 +22,14 @@
 metadata {
     definition (name: "Ubisys Power switch S1", namespace: "tomasaxerot", author: "Tomas Axerot") {
         capability "Actuator"
-        capability "Configuration"
-        capability "Refresh"
         capability "Switch"
         capability "Power Meter"
-
+        capability "Configuration"
+        capability "Refresh"
+        capability "Sensor"
+		capability "Health Check"
+        capability "Light"
+        
 		//0000 = Basic, 0003 = Identify, 0004 = Groups, 0005 = Scenes, 0006 = On/off, 0x0702 Metering, 0x0B04 Electrical Measurement, FC00 = Device Setup
 
 		//S1
