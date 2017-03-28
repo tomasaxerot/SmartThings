@@ -199,9 +199,6 @@ def ping() {
 def refresh() {
 	log.trace "refresh"
     
-    //zigbee.readAttribute(0x0B04, 0x050B, [destEndpoint: 0x04]) //Electric measurement
-    //zigbee.readAttribute(0xFC00, 0x0001, [destEndpoint: 0xE8]) //Device setup
-    
     def refreshCmds = []
     refreshCmds += zigbee.onOffRefresh() +
     			   zigbee.levelRefresh() +
@@ -250,11 +247,9 @@ def configure() {
         }    	
     }
     
-    //Reporting
-    //TODO: zigbee.configureReporting(0x0B04, 0x050B, 0x29, 1, 600, 0x05, [destEndpoint: 0x04])
     configCmds += zigbee.onOffConfig(0, 300) + 
     			  zigbee.levelConfig() + 
-                  zigbee.configureReporting(0x0702, 0x0400, 0x2A, 1, 600, 0x05, [destEndpoint: 0x04]) 
+                  zigbee.configureReporting(0x0702, 0x0400, 0x2A, 1, 600, 0x01, [destEndpoint: 0x04]) 
     
      return refresh() + configCmds
 }

@@ -187,7 +187,7 @@ def configure() {
     }
     
     configCmds += zigbee.onOffConfig(0, 300) +     			  
-                  zigbee.configureReporting(0x0702, 0x0400, 0x2A, 1, 600, 0x05, [destEndpoint: 0x03]) 
+                  zigbee.configureReporting(0x0702, 0x0400, 0x2A, 1, 600, 0x01, [destEndpoint: 0x03]) 
     
      return refresh() + configCmds    
 }
