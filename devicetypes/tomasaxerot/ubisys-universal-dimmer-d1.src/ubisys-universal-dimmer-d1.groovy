@@ -12,15 +12,12 @@
  *
  */
  
- /**
-  * Warning
-  * I would consider this DTH in alpha state atm
-  * 
+ /**   
   * Version: 
+  * 0.4 (2017-03-28): Cleaning up 
   * 0.3 (2017-03-26): Added possibility to set device mode: Push/Bi-Stable
   * 0.2 (2017-03-25): Added configuration and possibility to set phase control, also logging Dimmer setup(capabilities, status and mode) on refresh
-  * 0.1 (2017-03-24): Initial version of DTH for Ubisys Universal Dimmer D1 (Rev. 1), Application: 1.12, Stack: 1.88, Version: 0x010C0158
-  * 
+  * 0.1 (2017-03-24): Initial version of DTH for Ubisys Universal Dimmer D1 (Rev. 1), Application: 1.12, Stack: 1.88, Version: 0x010C0158  
   */
 
 metadata {
@@ -88,46 +85,45 @@ metadata {
     }
 }
 
-// Parse incoming device messages to generate events
 def parse(String description) {
     log.trace "parse: description is $description"	
 
 	def event = zigbee.getEvent(description)
 	if (event) {
-    	log.trace "parse: event is $event.name"        
+    	log.trace "parse: event is $event"        
         return createEvent(event)        
-	} 
-    
-    def cluster = zigbee.parse(description)
-	if(cluster) {
-    	log.trace "parse: cluster is $cluster"
-		
-		if (cluster.clusterId == 0x0006 && cluster.command == 0x07) {
-			if (cluster.data[0] == 0x00) {
-				log.debug "On/Off reporting successful"
-				return createEvent(name: "checkInterval", value: 60 * 12, displayed: false, data: [protocol: "zigbee", hubHardwareId: device.hub.hardwareID])
-			} else {
-				log.warn "On/Off reporting failed with code: ${cluster.data[0]}"				
-			}
-		} else if (cluster.clusterId == 0xfc00 && cluster.command == 0x04) {
-			if (cluster.data[0] == 0x00) {
-				log.debug "Device Setup successful"				
-			} else {
-				log.warn "Device Setup failed with code: ${cluster.data[0]}"                				
-			}            
-		} else if(!shouldProcessMessage(cluster)) {
-        	log.trace "parse: cluster message ignored"            
-        } else {
-			log.warn "parse: failed to process cluster message"			            
-		}
-        return null
-    }
+	}
     
     def map = zigbee.parseDescriptionAsMap(description)
     if(map) {
     	log.trace "parse: map is $map"
         
-    	if (map.clusterInt == 0xFC01 && map.attrInt == 0x0000 && map.value) {        	
+        if (map.clusterInt == 0x0006 && map.commandInt == 0x07) {
+			if (Integer.parseInt(map.data[0], 16) == 0x00) {
+				log.debug "On/Off reporting successful"
+				return createEvent(name: "checkInterval", value: 60 * 12, displayed: false, data: [protocol: "zigbee", hubHardwareId: device.hub.hardwareID])
+			} else {
+				log.warn "On/Off reporting failed with code: ${map.data[0]}"				
+			}
+        } else if (map.clusterInt == 0x0008 && map.commandInt == 0x07) {
+			if (Integer.parseInt(map.data[0], 16) == 0x00) {
+				log.debug "Level reporting successful"				
+			} else {
+				log.warn "Level reporting failed with code: ${map.data[0]}"				
+			}
+        } else if (map.clusterInt == 0x0702 && map.commandInt == 0x07) {
+			if (Integer.parseInt(map.data[0], 16) == 0x00) {
+				log.debug "Metering reporting successful"				
+			} else {
+				log.warn "Metering reporting failed with code: ${map.data[0]}"				
+			}
+		} else if (map.clusterInt == 0xFC00 && map.commandInt == 0x04) {
+			if (Integer.parseInt(map.data[0], 16) == 0x00) {
+				log.debug "Device Setup successful"				
+			} else {
+				log.warn "Device Setup failed with code: ${map.data[0]}"                				
+			}            		         
+        } else if (map.clusterInt == 0xFC01 && map.attrInt == 0x0000 && map.value) {        	
             def capabilitiesInt = Integer.parseInt(map.value, 16)            
                        
             log.debug "parse: AC Forward Phase Control ${capabilitiesInt & 0x01 ? "supported" : "not supported"}"            
@@ -135,8 +131,7 @@ def parse(String description) {
             log.debug "parse: Reactance Discriminator/Auto mode ${capabilitiesInt & 0x20 ? "supported" : "not supported"}"            
             log.debug "parse: Configurable Curve ${capabilitiesInt & 0x40 ? "supported" : "not supported"}"            
             log.debug "parse: Overload Detection ${capabilitiesInt & 0x80 ? "supported" : "not supported"}"                
-        }
-        else if (map.clusterInt == 0xFC01 && map.attrInt == 0x0001 && map.value) {        	
+        } else if (map.clusterInt == 0xFC01 && map.attrInt == 0x0001 && map.value) {        	
             def statusInt = Integer.parseInt(map.value, 16)
                  
             if(statusInt & 0x01)
@@ -149,8 +144,7 @@ def parse(String description) {
             	log.debug "parse: capacitive load detected"
             if(statusInt & 0x80)
             	log.debug "parse: inductive load detected"                 
-        }
-        else if (map.clusterInt == 0xFC01 && map.attrInt == 0x0002 && map.value) {
+        } else if (map.clusterInt == 0xFC01 && map.attrInt == 0x0002 && map.value) {
         	def modeInt = Integer.parseInt(map.value, 16)        	
             
             if((modeInt & 0x03) == 0)
@@ -159,8 +153,9 @@ def parse(String description) {
             	log.debug "parse: Phase control is force forward phase control (leading edge, L)"                
             if((modeInt & 0x03) == 2)
             	log.debug "parse: Phase control is force reverse phase control (trailing edge, C/R)"            
-        }    
-        else {
+        } else if(!shouldProcessMessage(map)) {
+        	log.trace "parse: map message ignored"            
+        } else {
         	log.warn "parse: failed to process map message"
         }
         return null
@@ -170,13 +165,13 @@ def parse(String description) {
     return null
 }
 
-private boolean shouldProcessMessage(cluster) {
+private boolean shouldProcessMessage(map) {
     // 0x0B is default response
     // 0x07 is configure reporting response
-    boolean ignoredMessage = cluster.profileId != 0x0104 ||
-        cluster.command == 0x0B ||
-        cluster.command == 0x07 ||
-        (cluster.data.size() > 0 && cluster.data.first() == 0x3e)
+    boolean ignoredMessage = map.profileId != 0x0104 ||
+        map.commandInt == 0x0B ||
+        map.commandInt == 0x07 ||
+        (map.data.size() > 0 && Integer.parseInt(map.data[0], 16) == 0x3e)
     return !ignoredMessage
 }
 

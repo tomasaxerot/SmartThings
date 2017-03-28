@@ -12,14 +12,11 @@
  *
  */
  
- /**
-  * Warning
-  * I would consider this DTH in alpha state atm
-  * 
+ /**  
   * Version:
+  * 0.3 (2017-03-28): Cleaning up 
   * 0.2 (2017-03-19): Removed power divisor, added configuration tile
-  * 0.1 (2017-03-15): Initial version of DTH for Ubisys Power switch S1 (Rev. 3), Application: 1.09, Stack: 1.88
-  * 
+  * 0.1 (2017-03-15): Initial version of DTH for Ubisys Power switch S1 (Rev. 3), Application: 1.09, Stack: 1.88  
   */
 
 metadata {
@@ -30,37 +27,17 @@ metadata {
         capability "Switch"
         capability "Power Meter"
 
-		//0000 = Basic
-        //0003 = Identify
-        //0004 = Groups
-        //0005 = Scenes
-        //0006 = On/off        
-        //0x0702 Metering
-		//0x0B04 Electrical Measurement
+		//0000 = Basic, 0003 = Identify, 0004 = Groups, 0005 = Scenes, 0006 = On/off, 0x0702 Metering, 0x0B04 Electrical Measurement, FC00 = Device Setup
 
 		//S1
         //Raw description: 01 0104 0009 00 05 0000 0003 0004 0005 0006 00
-        fingerprint profileId: "0104", inClusters: "0000, 0003, 0004, 0005, 0006, 0702", manufacturer: "ubisys", model: "S1 (5501)", deviceJoinName: "Ubisys Power switch S1"                
-        //fingerprint profileId: "0104", inClusters: "0000, 0003, 0004, 0005, 0006, 0702, 0x0B04", manufacturer: "ubisys", model: "S1 (5501)", deviceJoinName: "Ubisys Power switch S1"                
-
-		//S2
-		//Raw description: 01 0104 0002 00 05 0000 0003 0004 0005 0006 00
-        //fingerprint profileId: "0104", inClusters: "0000, 0003, 0004, 0005, 0006, 0702", manufacturer: "ubisys", model: "S2 (5502)", deviceJoinName: "Ubisys Power switch S2"
-        //fingerprint profileId: "0104", inClusters: "0000, 0003, 0004, 0005, 0006, 0702, 0x0B04", manufacturer: "ubisys", model: "S2 (5502)", deviceJoinName: "Ubisys Power switch S2"
-    }
-
-    // simulator metadata
-    simulator {
-        // status messages
-        status "on": "on/off: 1"
-        status "off": "on/off: 0"
-
-        // reply messages
-        reply "zcl on-off on": "on/off: 1"
-        reply "zcl on-off off": "on/off: 0"
-    }
+        //EndPoint 01: in: 0000 0003 0004 0005 0006
+        //EndPoint 02: 
+        //EndPoint 03: in: 0702 0B04
+        //EndPoint E8: in: 0xFC00
+        fingerprint profileId: "0104", inClusters: "0000, 0003, 0004, 0005, 0006, 0702", manufacturer: "ubisys", model: "S1 (5501)", deviceJoinName: "Ubisys Power switch S1"
+    }        
     
-    // UI tile definitions
 	tiles(scale: 2) {
 		multiAttributeTile(name: "switch", type: "lighting", width: 6, height: 4, canChangeIcon: true) {
 			tileAttribute("device.switch", key: "PRIMARY_CONTROL") {
@@ -68,10 +45,16 @@ metadata {
 				attributeState "off", label: 'Off', action: "switch.on", icon: "st.switches.switch.off", backgroundColor: "#ffffff", nextState: "turningOn"
 				attributeState "turningOn", label: 'Turning On', action: "switch.off", icon: "st.switches.switch.on", backgroundColor: "#00A0DC", nextState: "turningOff"
 				attributeState "turningOff", label: 'Turning Off', action: "switch.on", icon: "st.switches.switch.off", backgroundColor: "#ffffff", nextState: "turningOn"
-			}
-			tileAttribute("power", key: "SECONDARY_CONTROL") {
-				attributeState "power", label: '${currentValue} W'
-			}
+			}			
+		}
+        
+        valueTile("power", "device.power", width: 2, height: 2) {
+			state("default", label:'${currentValue} W',
+				backgroundColors:[
+					[value: 0, color: "#ffffff"],
+					[value: 1, color: "#00A0DC"]					
+				]
+			)
 		}
 
 		standardTile("refresh", "device.power", inactiveLabel: false, decoration: "flat", width: 2, height: 2) {
@@ -83,53 +66,66 @@ metadata {
 		}
 
 		main "switch"
-		details(["switch", "refresh", "configure"])
-	}    
+		details(["switch", "power", "refresh", "configure"])
+	}   
+    
+    preferences {        
+        input name: "deviceSetup", type: "enum", title: "Device Setup", options: ["Bi-Stable", "Push"], description: "Enter Device Setup, Bi-Stable button is default", required: false        
+        input name: "readConfiguration", type: "bool", title: "Read Advanced Configuration", description: "Enter Read Advanced Configuration", required: false
+    }
 }
 
-// Parse incoming device messages to generate events
 def parse(String description) {
     log.trace "parse: description is $description"	
 
 	def event = zigbee.getEvent(description)
 	if (event) {
-    	log.trace "parse: event is $event.name"
-		if (event.name == "power") {			
-            def descriptionText = '{{ device.displayName }} power is {{ value }} Watts'
-			event = createEvent(name: event.name, value: event.value, descriptionText: descriptionText, translatable: true)
-		} else if (event.name == "switch") {
-			def descriptionText = event.value == "on" ? '{{ device.displayName }} is On' : '{{ device.displayName }} is Off'
-			event = createEvent(name: event.name, value: event.value, descriptionText: descriptionText, translatable: true)
-		}
-	} else {
-		def cluster = zigbee.parse(description)
-
-		if (cluster && cluster.clusterId == 0x0006 && cluster.command == 0x07) {
-			if (cluster.data[0] == 0x00) {
-				log.debug "ON/OFF REPORTING CONFIG RESPONSE: " + cluster
-				event = createEvent(name: "checkInterval", value: 60 * 12, displayed: false, data: [protocol: "zigbee", hubHardwareId: device.hub.hardwareID])
-			} else {
-				log.warn "ON/OFF REPORTING CONFIG FAILED- error code:${cluster.data[0]}"
-				event = null
-			}
-		} else if(!shouldProcessMessage(cluster)) {
-        	log.trace "Message ignored"
-            event = null        	
-        } else {
-			log.warn "Failed to process message: $description"
-			log.debug "${cluster}"
-		}        
+    	log.trace "parse: event is $event"        
+        return createEvent(event)        
 	}
-	return event ? createEvent(event) : event   
+    
+    def map = zigbee.parseDescriptionAsMap(description)
+    if(map) {
+    	log.trace "parse: map is $map"        
+        
+        if (map.clusterInt == 0x0006 && map.commandInt == 0x07) {
+			if (Integer.parseInt(map.data[0], 16) == 0x00) {
+				log.debug "On/Off reporting successful"
+				return createEvent(name: "checkInterval", value: 60 * 12, displayed: false, data: [protocol: "zigbee", hubHardwareId: device.hub.hardwareID])
+			} else {
+				log.warn "On/Off reporting failed with code: ${map.data[0]}"				
+			}
+        } else if (map.clusterInt == 0x0702 && map.commandInt == 0x07) {
+			if (Integer.parseInt(map.data[0], 16) == 0x00) {
+				log.debug "Metering reporting successful"				
+			} else {
+				log.warn "Metering reporting failed with code: ${map.data[0]}"				
+			}
+		} else if (map.clusterInt == 0xFC00 && map.commandInt == 0x04) {
+			if (Integer.parseInt(map.data[0], 16) == 0x00) {
+				log.debug "Device Setup successful"				
+			} else {
+				log.warn "Device Setup failed with code: ${map.data[0]}"                				
+			}            		         
+        } else if(!shouldProcessMessage(map)) {
+        	log.trace "parse: map message ignored"            
+        } else {
+        	log.warn "parse: failed to process map message"
+        }
+        return null
+    }
+    
+    log.warn "parse: failed to process message"	
+    return null
 }
 
-private boolean shouldProcessMessage(cluster) {
-    // 0x0B is default response indicating message got through
-    // 0x07 is bind message
-    boolean ignoredMessage = cluster.profileId != 0x0104 ||
-        cluster.command == 0x0B ||
-        cluster.command == 0x07 ||
-        (cluster.data.size() > 0 && cluster.data.first() == 0x3e)
+private boolean shouldProcessMessage(map) {
+    // 0x0B is default response
+    // 0x07 is configure reporting response
+    boolean ignoredMessage = map.profileId != 0x0104 ||
+        map.commandInt == 0x0B ||
+        map.commandInt == 0x07 ||
+        (map.data.size() > 0 && Integer.parseInt(map.data[0], 16) == 0x3e)
     return !ignoredMessage
 }
 
@@ -150,15 +146,45 @@ def ping() {
 
 def refresh() {
 	log.trace "refresh"	
-    zigbee.onOffRefresh() + zigbee.readAttribute(0x0702, 0x0400, [destEndpoint: 0x03]) /*+ zigbee.readAttribute(0x0B04, 0x050B, [destEndpoint: 0x03])*/
+    
+    def refreshCmds = []
+    refreshCmds += zigbee.onOffRefresh() +    			   
+                   zigbee.readAttribute(0x0702, 0x0400, [destEndpoint: 0x03])
+                   
+    if(readConfiguration) {
+    	refreshCmds += zigbee.readAttribute(0xFC00, 0x0000, [destEndpoint: 0xE8]) + 
+                   	   zigbee.readAttribute(0xFC00, 0x0001, [destEndpoint: 0xE8])
+                       
+    }                   
+                
+    return refreshCmds
 }
+
+//Device Setup. Bi-Stable is default
+private getDEVICESETUP_BISTABLE() { "02000602030006020006020D0006000241" }
+private getDEVICESETUP_PUSH() { "020006020d0106020006020d0006000241" }
 
 def configure() {
 	log.trace "configure"
-	// Device-Watch allows 2 check-in misses from device + ping (plus 1 min lag time)
-	// enrolls with default periodic reporting until newer 5 min interval is confirmed
-	sendEvent(name: "checkInterval", value: 2 * 10 * 60 + 1 * 60, displayed: false, data: [protocol: "zigbee", hubHardwareId: device.hub.hardwareID])
+
+    // Device-Watch allows 2 check-in misses from device + ping (plus 1 min lag time)
+    // enrolls with default periodic reporting until newer 5 min interval is confirmed
+    sendEvent(name: "checkInterval", value: 2 * 60 * 60 + 1 * 60, displayed: false, data: [protocol: "zigbee", hubHardwareId: device.hub.hardwareID])
     
-    // OnOff minReportTime 0 seconds, maxReportTime 5 min. Reporting interval if no activity
-    refresh() + zigbee.onOffConfig(0, 300) + zigbee.configureReporting(0x0702, 0x0400, 0x2A, 1, 600, 0x05, [destEndpoint: 0x03]) /*+ zigbee.configureReporting(0x0B04, 0x050B, 0x29, 1, 600, 0x05, [destEndpoint: 0x03])*/
+    def configCmds = []
+    
+    //Configure device setup
+    if(deviceSetup) {
+    	log.debug "configure: set device setup to $deviceSetup"        
+        if(deviceSetup == "Push") {                        	
+            configCmds += "st wattr 0x${device.deviceNetworkId} 0xE8 0xFC00 0x0001 0x48 {${DEVICESETUP_PUSH}}"            
+        } else if(deviceSetup == "Bi-Stable") {                
+        	configCmds += "st wattr 0x${device.deviceNetworkId} 0xE8 0xFC00 0x0001 0x48 {${DEVICESETUP_BISTABLE}}"            
+        }    
+    }
+    
+    configCmds += zigbee.onOffConfig(0, 300) +     			  
+                  zigbee.configureReporting(0x0702, 0x0400, 0x2A, 1, 600, 0x05, [destEndpoint: 0x03]) 
+    
+     return refresh() + configCmds    
 }
