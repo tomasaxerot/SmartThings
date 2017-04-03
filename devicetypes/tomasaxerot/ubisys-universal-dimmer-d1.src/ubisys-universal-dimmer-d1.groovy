@@ -12,15 +12,8 @@
  *
  */
  
- /**   
-  * Version: 
-  * 0.4 (2017-03-28): Cleaning up 
-  * 0.3 (2017-03-26): Added possibility to set device mode: Push/Bi-Stable
-  * 0.2 (2017-03-25): Added configuration and possibility to set phase control, also logging Dimmer setup(capabilities, status and mode) on refresh
-  * 0.1 (2017-03-24): Initial version of DTH for Ubisys Universal Dimmer D1 (Rev. 1), Application: 1.12, Stack: 1.88, Version: 0x010C0158  
-  */
-
 metadata {
+	//DTH for Ubisys Universal Dimmer D1 (Rev. 1), Application: 1.12, Stack: 1.88, Version: 0x010C0158
     definition (name: "Ubisys Universal Dimmer D1", namespace: "tomasaxerot", author: "Tomas Axerot") {
         capability "Actuator"
         capability "Configuration"
@@ -31,15 +24,6 @@ metadata {
         capability "Switch Level"
         capability "Health Check"
         capability "Light"
-
-		//0000 = Basic, 0003 = Identify, 0004 = Groups, 0005 = Scenes, 0006 = On/off, 0008 = Level control, 
-        //0301 = ballast, 0702 = Metering, 0B04 = Electrical Measurement, FC00 = Device Setup, FC01 = Dimmer Setup
-
-		//Raw: 01 0104 0101 00 08 0000 0003 0004 0005 0006 0008 0301 FC01 00
-        //Endpoint 1: in: 0000, 0003, 0004, 0005, 0006, 0008, 0301 FC01        
-        //Endpoint 2: in: 0000, 0003, out: 0005, 0006, 0008 (input 1)
-        //Endpoint 3: in: 0000, 0003, out: 0005, 0006, 0008 (input 2)
-        //Endpoint 4: in: 0702, 0B04        
         
         fingerprint profileId: "0104", inClusters: "0000, 0003, 0004, 0005, 0006, 0008, 0702", outClusters: "0005, 0006, 0008", manufacturer: "ubisys", model: "D1 (5503)", deviceJoinName: "Ubisys Universal Dimmer D1"
     }
@@ -79,6 +63,7 @@ metadata {
     }
     
     preferences {        
+    	//D1: Button (Level), Switch (toggle), Switch (on/off), Button (on/off), Pair of Buttons (level)....select input 1/2
         input name: "deviceSetup", type: "enum", title: "Device Setup", options: ["Push", "Bi-Stable"], description: "Enter Device Setup, Push button is default", required: false
         input name: "phaseControl", type: "enum", title: "Phase Control", options: ["Auto", "Leading", "Trailing"], description: "Enter Phase Control, Auto is recommended", required: false
         input name: "readConfiguration", type: "bool", title: "Read Advanced Configuration", description: "Enter Read Advanced Configuration", required: false
@@ -89,16 +74,13 @@ def parse(String description) {
     log.trace "parse: description is $description"	
 
 	def event = zigbee.getEvent(description)
-	if (event) {
-    	log.trace "parse: event is $event"        
+	if (event) {    	
         return createEvent(event)        
 	}
     
     def map = zigbee.parseDescriptionAsMap(description)
     if(map) {
-    	log.trace "parse: map is $map"
-        
-        if (map.clusterInt == 0x0006 && map.commandInt == 0x07) {
+    	if (map.clusterInt == 0x0006 && map.commandInt == 0x07) {
 			if (Integer.parseInt(map.data[0], 16) == 0x00) {
 				log.debug "On/Off reporting successful"
 				return createEvent(name: "checkInterval", value: 60 * 12, displayed: false, data: [protocol: "zigbee", hubHardwareId: device.hub.hardwareID])
@@ -156,7 +138,7 @@ def parse(String description) {
         } else if(!shouldProcessMessage(map)) {
         	log.trace "parse: map message ignored"            
         } else {
-        	log.warn "parse: failed to process map message"
+        	log.warn "parse: failed to process map $map"
         }
         return null
     }
@@ -190,7 +172,6 @@ def setLevel(value) {
     zigbee.setLevel(value) + (value?.toInteger() > 0 ? zigbee.on() : [])
 }
 
-//PING is used by Device-Watch in attempt to reach the Device 
 def ping() {
 	log.trace "ping"
     return zigbee.onOffRefresh()
@@ -224,7 +205,9 @@ def configure() {
     // enrolls with default periodic reporting until newer 5 min interval is confirmed
     sendEvent(name: "checkInterval", value: 2 * 60 * 60 + 1 * 60, displayed: false, data: [protocol: "zigbee", hubHardwareId: device.hub.hardwareID])
     
-    def configCmds = []
+    def configCmds = zigbee.onOffConfig(0, 300) + 
+    				 zigbee.levelConfig() + 
+                     zigbee.configureReporting(0x0702, 0x0400, 0x2A, 1, 600, 0x01, [destEndpoint: 0x04])
     
     if(deviceSetup) {
     	log.debug "configure: set device setup to $deviceSetup"        
@@ -233,9 +216,8 @@ def configure() {
         } else if(deviceSetup == "Bi-Stable") {                
         	configCmds += "st wattr 0x${device.deviceNetworkId} 0xE8 0xFC00 0x0001 0x48 {${DEVICESETUP_BISTABLE}}"            
         }    
-    }
+    }    
     
-    //Configure phase control
     if(phaseControl) {
     	log.debug "configure: set phase control to $phaseControl"
         if(phaseControl == "Auto") {        	
@@ -246,10 +228,6 @@ def configure() {
             configCmds += zigbee.writeAttribute(0xFC01, 0x0002, 0x18, 0x02) //Trailing
         }    	
     }
-    
-    configCmds += zigbee.onOffConfig(0, 300) + 
-    			  zigbee.levelConfig() + 
-                  zigbee.configureReporting(0x0702, 0x0400, 0x2A, 1, 600, 0x01, [destEndpoint: 0x04]) 
     
      return refresh() + configCmds
 }

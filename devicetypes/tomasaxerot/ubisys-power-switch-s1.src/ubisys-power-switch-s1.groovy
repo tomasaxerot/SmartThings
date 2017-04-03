@@ -10,16 +10,10 @@
  *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *  for the specific language governing permissions and limitations under the License.
  *
- */
- 
- /**  
-  * Version:
-  * 0.3 (2017-03-28): Cleaning up 
-  * 0.2 (2017-03-19): Removed power divisor, added configuration tile
-  * 0.1 (2017-03-15): Initial version of DTH for Ubisys Power switch S1 (Rev. 3), Application: 1.09, Stack: 1.88  
-  */
+ */ 
 
 metadata {
+	//DTH for Ubisys Power switch S1 (Rev. 3), Application: 1.09, Stack: 1.88
     definition (name: "Ubisys Power switch S1", namespace: "tomasaxerot", author: "Tomas Axerot") {
         capability "Actuator"
         capability "Switch"
@@ -30,14 +24,6 @@ metadata {
 		capability "Health Check"
         capability "Light"
         
-		//0000 = Basic, 0003 = Identify, 0004 = Groups, 0005 = Scenes, 0006 = On/off, 0x0702 Metering, 0x0B04 Electrical Measurement, FC00 = Device Setup
-
-		//S1
-        //Raw description: 01 0104 0009 00 05 0000 0003 0004 0005 0006 00
-        //EndPoint 01: in: 0000 0003 0004 0005 0006
-        //EndPoint 02: 
-        //EndPoint 03: in: 0702 0B04
-        //EndPoint E8: in: 0xFC00
         fingerprint profileId: "0104", inClusters: "0000, 0003, 0004, 0005, 0006, 0702", manufacturer: "ubisys", model: "S1 (5501)", deviceJoinName: "Ubisys Power switch S1"
     }        
     
@@ -73,6 +59,7 @@ metadata {
 	}   
     
     preferences {        
+    	//S1: Switch (on/off), Button (on/off), Switch (toggle)                
         input name: "deviceSetup", type: "enum", title: "Device Setup", options: ["Bi-Stable", "Push"], description: "Enter Device Setup, Bi-Stable button is default", required: false        
         input name: "readConfiguration", type: "bool", title: "Read Advanced Configuration", description: "Enter Read Advanced Configuration", required: false
     }
@@ -82,16 +69,13 @@ def parse(String description) {
     log.trace "parse: description is $description"	
 
 	def event = zigbee.getEvent(description)
-	if (event) {
-    	log.trace "parse: event is $event"        
+	if (event) {    	
         return createEvent(event)        
 	}
     
     def map = zigbee.parseDescriptionAsMap(description)
     if(map) {
-    	log.trace "parse: map is $map"        
-        
-        if (map.clusterInt == 0x0006 && map.commandInt == 0x07) {
+    	if (map.clusterInt == 0x0006 && map.commandInt == 0x07) {
 			if (Integer.parseInt(map.data[0], 16) == 0x00) {
 				log.debug "On/Off reporting successful"
 				return createEvent(name: "checkInterval", value: 60 * 12, displayed: false, data: [protocol: "zigbee", hubHardwareId: device.hub.hardwareID])
@@ -113,7 +97,7 @@ def parse(String description) {
         } else if(!shouldProcessMessage(map)) {
         	log.trace "parse: map message ignored"            
         } else {
-        	log.warn "parse: failed to process map message"
+        	log.warn "parse: failed to process map $map"
         }
         return null
     }
@@ -150,14 +134,12 @@ def ping() {
 def refresh() {
 	log.trace "refresh"	
     
-    def refreshCmds = []
-    refreshCmds += zigbee.onOffRefresh() +    			   
-                   zigbee.readAttribute(0x0702, 0x0400, [destEndpoint: 0x03])
+    def refreshCmds = zigbee.onOffRefresh() +    			   
+                   	  zigbee.readAttribute(0x0702, 0x0400, [destEndpoint: 0x03])
                    
     if(readConfiguration) {
     	refreshCmds += zigbee.readAttribute(0xFC00, 0x0000, [destEndpoint: 0xE8]) + 
-                   	   zigbee.readAttribute(0xFC00, 0x0001, [destEndpoint: 0xE8])
-                       
+                   	   zigbee.readAttribute(0xFC00, 0x0001, [destEndpoint: 0xE8])                       
     }                   
                 
     return refreshCmds

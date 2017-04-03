@@ -11,13 +11,9 @@
  *  for the specific language governing permissions and limitations under the License.
  *
  */
- 
- /**  
-  * Version: 
-  * 0.1 (2017-03-29): Initial version of DTH for Ubisys Power switch S2 (Rev. 2), Application: 1.08, Stack: 1.88, Version: 0x01080158 
-  */
 
 metadata {
+	//DTH for Ubisys Power switch S2 (Rev. 2), Application: 1.08, Stack: 1.88, Version: 0x01080158
     definition (name: "Ubisys Power Switch S2", namespace: "tomasaxerot", author: "Tomas Axerot") {
         capability "Actuator"
         capability "Switch"
@@ -27,15 +23,7 @@ metadata {
         capability "Sensor"
         capability "Health Check"
         capability "Light"
-        
-		//0000 = Basic, 0003 = Identify, 0004 = Groups, 0005 = Scenes, 0006 = On/off, 0x0702 Metering, 0x0B04 Electrical Measurement, FC00 = Device Setup
-
-        //S2
-		//Raw description: 01 0104 0002 00 05 0000 0003 0004 0005 0006 00
-        //EndPoint 01: On/Off 1: in: 0000 0003 0004 0005 0006
-        //EndPoint 02: On/Off 2: in: 0000 0003 0004 0005 0006
-        //EndPoint 05: Metering: in: 0702 0B04
-        //EndPoint E8: Device: in: FC00
+		
         fingerprint profileId: "0104", inClusters: "0000, 0003, 0004, 0005, 0006, 0702", manufacturer: "ubisys", model: "S2 (5502)", deviceJoinName: "Ubisys Power Switch S2"        
     }        
     
@@ -48,7 +36,7 @@ metadata {
 				attributeState "turningOff", label: 'Turning Off', action: "switch.on", icon: "st.switches.switch.off", backgroundColor: "#ffffff", nextState: "turningOn"
 			}			
 		}
-        childDeviceTiles("outlets")
+        
         valueTile("power", "device.power", width: 2, height: 2) {
 			state("default", label:'${currentValue} W',
 				backgroundColors:[
@@ -71,6 +59,7 @@ metadata {
 	}   
     
     preferences {        
+    	//S2: Button (Level), Switch (toggle), Switch (on/off), Button (on/off), Pair of Buttons (toggle)....select input 1/2
         input name: "deviceSetup", type: "enum", title: "Device Setup", options: ["Push", "Bi-Stable"], description: "Enter Device Setup, Push button is default", required: false        
         input name: "readConfiguration", type: "bool", title: "Read Advanced Configuration", description: "Enter Read Advanced Configuration", required: false
     }
@@ -80,16 +69,14 @@ def parse(String description) {
     log.trace "parse: description is $description"	
     
     if (description?.startsWith("on/off")) {
-    	//Trigger read of cluster 6 ep 1/2
+    	//Trigger read of cluster 6 ep 1/2, need to poll due to missing endpoint in attribute report
         def cmds = zigbee.readAttribute(0x0006, 0x0000, [destEndpoint: 0x01]) + zigbee.readAttribute(0x0006, 0x0000, [destEndpoint: 0x02])		
 		return cmds.collect { new physicalgraph.device.HubAction(it) }        
     }
     
     def map = zigbee.parseDescriptionAsMap(description)
     if(map) {
-    	//log.trace "parse: map is $map"        
-        
-        if (map.clusterInt == 0x0006 && map.attrInt == 0x00 && map.commandInt == 0x01) {
+    	if (map.clusterInt == 0x0006 && map.attrInt == 0x00 && map.commandInt == 0x01) {
 			log.debug "parse: switch read from $map.sourceEndpoint"
             if(map.sourceEndpoint == "01") {            	
             	return createEvent(name: "switch", value: map.value == "01" ? "on" : "off")
@@ -157,12 +144,6 @@ def on() {
     zigbee.on()
 }
 
-/*def childoff(String dni) {	
-	log.trace "off2"
-    //zigbee.command(0x0006, 0x00, "", [destEndpoint: 0x02])
-    zigbee.command(0x0006, 0x00)
-}*/
-
 void off2() {	
 	log.trace "off2"        
     
@@ -170,7 +151,7 @@ void off2() {
     sendHubCommand(actions)
 }
 
-void on2(String dni) {	
+void on2() {	
 	log.trace "on2"
     
     def actions = [new physicalgraph.device.HubAction("st cmd 0x${device.deviceNetworkId} 0x02 0x0006 0x01 {}")]    
@@ -179,8 +160,7 @@ void on2(String dni) {
 
 def installed() {
 	log.trace "installed"
-    createChildDevices()
-    //response(configure())
+    createChildDevices()    
 }
 
 private void createChildDevices() {
