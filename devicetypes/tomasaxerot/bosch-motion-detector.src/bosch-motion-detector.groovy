@@ -91,7 +91,7 @@ def parse(String description) {
 			map = parseIasMessage(description)
 		} else {
 			Map descMap = zigbee.parseDescriptionAsMap(description)
-			if (descMap?.clusterInt == 0x0001 && descMap.commandInt != 0x07 && descMap?.value) {
+			if (descMap?.clusterInt == 0x0001 && descMap.attrInt == 0x0020 && descMap.commandInt != 0x07 && descMap?.value) {
 				map = getBatteryResult(Integer.parseInt(descMap.value, 16))
 			} else if (descMap?.clusterInt == zigbee.TEMPERATURE_MEASUREMENT_CLUSTER && descMap.commandInt == 0x07) {
 				if (descMap.data[0] == "00") {
@@ -138,22 +138,37 @@ private Map getBatteryResult(rawValue) {
 
 	def result = [:]
 
-	//ISW-ZPR1-WP13 and ISW-ZDL1-WP11G both uses 4 AA batteries. ISW-ZDL1-WP11G also uses
-    //another two AA batteries for its microwave radar.
-
+	//ISW-ZPR1-WP13 uses 4 batteries, 2 are used in measurement
+    //ISW-ZDL1-WP11G uses 6 batteries, 4 are used in measurement 
+    
 	if (!(rawValue == 0 || rawValue == 255)) {
 		result.name = 'battery'
 		result.translatable = true
 		result.descriptionText = "{{ device.displayName }} battery was {{ value }}%"		
         
-		def volts = rawValue // For the batteryMap to work the key needs to be an int
-		def batteryMap = [60: 100, 59: 100, 58: 100, 57: 100, 56: 100, 55: 100,            
+		def model = device.getDataValue("model")
+        def volts = rawValue // For the batteryMap to work the key needs to be an int
+		def batteryMap = []
+        def minVolts = 0
+		def maxVolts = 0
+                          
+        if (model == "ISW-ZDL1-WP11G") {	
+        	batteryMap = [60: 100, 59: 100, 58: 100, 57: 100, 56: 100, 55: 100,            
         				  54: 100, 53: 100, 52: 100, 51: 100, 50: 90, 49: 90,
                           48: 90, 47: 90, 46: 70, 45: 70, 44: 70, 43: 70, 42: 50, 
                           41: 50, 40: 50, 39: 50, 38: 30, 37: 30, 36: 30, 35: 30,
                           34: 15, 33: 15, 32: 1, 31: 1, 30: 0]                          
-		def minVolts = 30        
-		def maxVolts = 60
+        	minVolts = 30        
+            maxVolts = 60			           
+        } else if(model == "ISW-ZPR1-WP13") {
+        	batteryMap = [30: 100, 29: 100, 28: 100, 27: 100, 26: 100, 25: 90, 24: 90, 23: 70,
+							  22: 70, 21: 50, 20: 50, 19: 30, 18: 30, 17: 15, 16: 1, 15: 0]
+			minVolts = 15
+			maxVolts = 30         
+        } else {
+        	result.value = 0
+            return result
+        }
 
 		if (volts < minVolts)
 			volts = minVolts
