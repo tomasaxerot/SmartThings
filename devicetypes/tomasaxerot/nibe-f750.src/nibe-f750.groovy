@@ -15,6 +15,11 @@
  *  Based on work by Petter Arnqvist Eriksson
  */
  
+def tempColors = [[value: 31, color: "#153591"], [value: 44, color: "#1e9cbb"], [value: 59, color: "#90d2a7"], [value: 74, color: "#44b621"], 
+                  [value: 84, color: "#f1d801"], [value: 95, color: "#d04e00"], [value: 96, color: "#bc2323"]]
+                  
+def stateColors = [[value: 0, color: "#cccccc"], [value: 1, color: "#00a0dc"]]
+ 
 metadata {
 	definition (name: "Nibe F750", namespace: "tomasaxerot", author: "Tomas Axerot") {
 		capability "Polling"
@@ -24,59 +29,43 @@ metadata {
         attribute "fan_speed", "number"
        	attribute "water_temp", "number"
         attribute "outdoor_temp", "number"
+        attribute "compressor", "number"
 	}
-
+    
 tiles(scale: 2) {
-		multiAttributeTile(name:"temperature", type:"thermostat", width:6, height:4, canChangeIcon: true) {
+		multiAttributeTile(name: "temperature", type: "thermostat", width: 6, height: 4, canChangeIcon: true) {
   			tileAttribute("device.temperature", key: "PRIMARY_CONTROL") {
-    			attributeState "temperature", label:'${currentValue}°', backgroundColors:[
-                	[value: 31, color: "#153591"],
-                    [value: 44, color: "#1e9cbb"],
-                    [value: 59, color: "#90d2a7"],
-                    [value: 74, color: "#44b621"],
-                    [value: 84, color: "#f1d801"],
-                    [value: 95, color: "#d04e00"],
-                    [value: 96, color: "#bc2323"]
-                ]
+    			attributeState "temperature", label: '${currentValue}°', unit: "F", backgroundColors: tempColors
   			}
   			tileAttribute("device.water_temp", key: "SECONDARY_CONTROL") {
-    			attributeState "temperature", icon:"http://cdn.device-icons.smartthings.com/Bath/bath6-icn@2x.png", label:'${currentValue}°', unit:"C"
+    			attributeState "temperature", icon: "http://cdn.device-icons.smartthings.com/Bath/bath6-icn@2x.png", label: '${currentValue}°', unit: "C"
   			}
         }        
         
         valueTile("outdoor_temp", "device.outdoor_temp", width: 2, height: 2) {
-            state "temperature", label:'Outdoor ${currentValue}°', unit:"F", defaultState: true, backgroundColors: [
-                [value: 31, color: "#153591"],
-                [value: 44, color: "#1e9cbb"],
-                [value: 59, color: "#90d2a7"],
-                [value: 74, color: "#44b621"],
-                [value: 84, color: "#f1d801"],
-                [value: 95, color: "#d04e00"],
-                [value: 96, color: "#bc2323"]
-            ]
+            state "temperature", label: 'Outdoor\n ${currentValue}°', unit: "F", defaultState: true, backgroundColors: tempColors
         }         
         
         valueTile("fan_speed", "device.fan_speed", width: 2, height: 2) {
-            state "default", label:'Fan ${currentValue}%', unit:"%", defaultState: true, backgroundColors: [
-                [value: 0, color: "#cccccc"],
-                [value: 1, color: "#00a0dc"]
-            ]
+            state "default", label: 'Fan\n ${currentValue}%', unit: "%", defaultState: true, backgroundColors: stateColors
         }
         
         valueTile("power", "device.power", width: 2, height: 2) {
-            state "default", label:'Addition ${currentValue}kW', unit:"kW", defaultState: true, backgroundColors: [
-                [value: 0, color: "#cccccc"],
-                [value: 1, color: "#00a0dc"]
-            ]
+            state "default", label: 'Addition\n ${currentValue}kW', unit: "kW", defaultState: true, backgroundColors: stateColors
+        }
+        
+        valueTile("compressor", "device.compressor", width: 2, height: 2) {
+            state "default", label: 'Comp.\n ${currentValue}Hz', unit: "Hz", defaultState: true, backgroundColors: stateColors
         }
 
 		standardTile("refresh", "device.weather", inactiveLabel: false, width: 2, height: 2, decoration: "flat", wordWrap: true) {
-			state "default", label: "", action: "refresh", icon:"st.secondary.refresh"
+			state "default", label: "", action: "refresh", icon: "st.secondary.refresh"
 		}
 
 		main(["temperature"])
-		details(["temperature", "water_temp", "outdoor_temp", "fan_speed", "power", "refresh"])}
+		details(["temperature", "water_temp", "outdoor_temp", "fan_speed", "power", "compressor", "refresh"])}
 }
+
 def parse(String description) {}
 
 def poll() {
@@ -84,63 +73,43 @@ def poll() {
     getOutdoorTemp()
     getWaterTemp()
 	getFanSpeed()
-	getAddition()	
+	getAddition()
+    getCompressorFrequency()
+}
+
+def getParameter(String parmeterCode, Closure rawToDisplay, String eventName) {
+	def rawValue = parent.getParameter(parmeterCode)
+    if(rawValue != null) {
+    	def displayValue = rawToDisplay(rawValue)
+        log.debug "$parmeterCode: ${displayValue}"
+        sendEvent("name": eventName, "value": displayValue)
+    } else {
+        log.debug "No data available"
+    }    
 }
 
 def getIndoorTemp() {
-	def rawValue = parent.getParameter('indoor_temperature')
-    if(rawValue != null) {
-    	def indoor_temp = rawValue.toInteger() / 10
-        log.debug "indoor_temperature: ${indoor_temp}"
-        sendEvent("name":"temperature", "value":indoor_temp)
-    } else {
-        log.debug "No data available"
-    }    
+	getParameter("indoor_temperature", { a -> a.toInteger() / 10}, "temperature")
 }
 
-
 def getOutdoorTemp() {
-	def rawValue = parent.getParameter('outdoor_temperature')    
-    if(rawValue != null) {
-    	def outdoor_temp = rawValue.toInteger() / 10
-        log.debug "outdoor_temperature: ${outdoor_temp}"
-        sendEvent("name":"outdoor_temp", "value":outdoor_temp)
-    } else {
-        log.debug "No data available"
-    }    
+	getParameter("outdoor_temperature", { a -> a.toInteger() / 10}, "outdoor_temp")
 }
 
 def getWaterTemp() {
-	def rawValue = parent.getParameter('hot_water_temperature')    
-    if(rawValue != null) {
-    	def water_temp = rawValue.toInteger() / 10
-        log.debug "hot_water_temperature: ${water_temp}"
-        sendEvent("name":"water_temp", "value":water_temp)
-    } else {
-        log.debug "No data available"
-    }    
+	getParameter("hot_water_temperature", { a -> a.toInteger() / 10}, "water_temp")
 }
 
 def getFanSpeed() {
-    def rawValue = parent.getParameter('fan_speed')
-    if(rawValue != null) {
-    	def fan_speed = rawValue.toInteger()
-        log.debug "fan_speed: ${fan_speed}"
-        sendEvent("name":"fan_speed", "value":fan_speed)
-    } else {
-        log.debug "No data available"
-    }
+	getParameter("fan_speed", { a -> a.toInteger() }, "fan_speed")
 }
 
 def getAddition() {
-	def rawValue = parent.getParameter('43084')    
-    if(rawValue != null) {
-    	def addition = rawValue.toInteger() / 100
-        log.debug "Addition: ${addition}"
-        sendEvent("name":"power", "value":addition)
-    } else {
-        log.debug "No data available"
-    }
+	getParameter("43084", { a -> a.toInteger() / 100 }, "power")
+}
+
+def getCompressorFrequency() {
+	getParameter("43136", { a -> Math.round(a.toInteger() / 10) }, "compressor")	
 }
 
 def refresh() {
