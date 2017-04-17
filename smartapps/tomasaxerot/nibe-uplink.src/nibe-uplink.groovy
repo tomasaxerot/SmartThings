@@ -217,7 +217,7 @@ def setupChildDevice() {
     }
 }
 
-def getParameter(String parameterId) {    
+def getParameter(List<String> parameterIds) {    
     if(isTokenExpired()) {
     	refreshAuthToken()
     }
@@ -225,7 +225,7 @@ def getParameter(String parameterId) {
     def params = [
         uri:  'https://api.nibeuplink.com',
         path: "/api/v1/systems/" + systemId + "/parameters",
-        query: [parameterIds: parameterId],
+        query: [parameterIds: parameterIds],
         contentType: 'application/json',
         headers: ["Authorization": "Bearer ${atomicState.authToken}"]
     ]
@@ -233,7 +233,7 @@ def getParameter(String parameterId) {
     try {
         httpGet(params) {resp ->
             log.debug "resp data: ${resp.data}"
-            return resp.data.rawValue[0]
+            return resp.data
         }
     } catch (e) {
         log.error "error: $e"
@@ -247,38 +247,3 @@ def installed() {
 def updated() {
 	setupChildDevice()
 }
-
-/**
-def isSystemIdSet() {
-    if (systemId == null) {
-    	return getSystemId()
-    }
-    return false
-}
-*/
-
-/**
-def getSystemId() {
-	//refreshAuthToken()
-
-    def params = [
-        uri:  'https://api.nibeuplink.com',
-        path: '/api/v1/systems',
-        //query: [parameterIds: 'systemid'],
-        contentType: 'application/json',
-        headers: ["Authorization": "Bearer ${atomicState.authToken}"]
-    ]
-    //log.debug " Chilla: ${params}"
-    try {
-        httpGet(params) {resp ->
-            //log.debug "resp data: ${resp.data}"
-            //log.debug "SystemID: ${resp.data.objects.systemId}"
-
-            def systemId = resp.data.objects.systemId
-            log.debug "SystemID: ${systemId}"
-        }
-    } catch (e) {
-        log.error "error: $e"
-    }
-}
-*/
