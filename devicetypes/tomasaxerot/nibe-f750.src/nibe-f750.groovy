@@ -69,47 +69,33 @@ tiles(scale: 2) {
 def parse(String description) {}
 
 def poll() {
-	getIndoorTemp()
-    getOutdoorTemp()
-    getWaterTemp()
-	getFanSpeed()
-	getAddition()
-    getCompressorFrequency()
+	log.trace "poll"	
+    readParameters()
 }
 
-def getParameter(String parmeterCode, Closure rawToDisplay, String eventName) {
-	def rawValue = parent.getParameter(parmeterCode)
-    if(rawValue != null) {
-    	def displayValue = rawToDisplay(rawValue)
-        log.debug "$parmeterCode: ${displayValue}"
-        sendEvent("name": eventName, "value": displayValue)
+def readParameters() {
+	def valueMap = parent.getParameter(["40033", "40004", "40013", "10001", "43084", "43136"])
+    if(valueMap != null) {
+    	handleParameter(40033, valueMap, { a -> a.toInteger() / 10}, "temperature")        
+        handleParameter(40004, valueMap, { a -> a.toInteger() / 10}, "outdoor_temp")
+        handleParameter(40013, valueMap, { a -> a.toInteger() / 10}, "water_temp")
+        handleParameter(10001, valueMap, { a -> a.toInteger() }, "fan_speed")
+        handleParameter(43084, valueMap, { a -> a.toInteger() / 100 }, "power")
+        handleParameter(43136, valueMap, { a -> Math.round(a.toInteger() / 10) }, "compressor")
     } else {
-        log.debug "No data available"
+        log.debug "readParameters: No response"
     }    
 }
 
-def getIndoorTemp() {
-	getParameter("indoor_temperature", { a -> a.toInteger() / 10}, "temperature")
-}
-
-def getOutdoorTemp() {
-	getParameter("outdoor_temperature", { a -> a.toInteger() / 10}, "outdoor_temp")
-}
-
-def getWaterTemp() {
-	getParameter("hot_water_temperature", { a -> a.toInteger() / 10}, "water_temp")
-}
-
-def getFanSpeed() {
-	getParameter("fan_speed", { a -> a.toInteger() }, "fan_speed")
-}
-
-def getAddition() {
-	getParameter("43084", { a -> a.toInteger() / 100 }, "power")
-}
-
-def getCompressorFrequency() {
-	getParameter("43136", { a -> Math.round(a.toInteger() / 10) }, "compressor")	
+def handleParameter(int parmeterId, List<Map> parameterResponse, Closure rawToDisplay, String eventName) {	    
+    def valueMap = parameterResponse.find { m -> m.parameterId == parmeterId }
+    if(valueMap != null) {
+    	def displayValue = rawToDisplay(valueMap.rawValue)
+        log.debug "$valueMap.parameterId: ${displayValue}"
+        sendEvent("name": eventName, "value": displayValue)
+    } else {
+        log.debug "handleParameter: parmeterId: $parmeterId not found"
+    }    
 }
 
 def refresh() {
