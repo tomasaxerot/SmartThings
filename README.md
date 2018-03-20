@@ -6,7 +6,7 @@
 * [Ubisys Power Switch S1](https://github.com/tomasaxerot/SmartThings/blob/master/devicetypes/tomasaxerot/ubisys-power-switch-s1.src/ubisys-power-switch-s1.groovy)
 * [Ubisys Power Switch S2](https://github.com/tomasaxerot/SmartThings/blob/master/devicetypes/tomasaxerot/ubisys-power-switch-s2.src/ubisys-power-switch-s2.groovy)
 * [Ubisys Universal Dimmer D1](https://github.com/tomasaxerot/SmartThings/blob/master/devicetypes/tomasaxerot/ubisys-universal-dimmer-d1.src/ubisys-universal-dimmer-d1.groovy)
-* [Visonic MCT-340 E](https://github.com/tomasaxerot/SmartThings/blob/master/devicetypes/tomasaxerot/visonic-door-window-sensor.src/visonic-door-window-sensor.groovy)
+* [Visonic MCT-340 E](https://github.com/tomasaxerot/SmartThings/blob/master/devicetypes/tomasaxerot/visonic-door-window-sensor.src/visonic-door-window-sensor.groovy) **Do not use this, this device is nowadays natively supported by SmartThings**
 
 ## SmartApps:
 * [Alarm Proxy](https://github.com/tomasaxerot/SmartThings/tree/master/smartapps/tomasaxerot/alarm-proxy.src)
